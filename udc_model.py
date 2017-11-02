@@ -2,6 +2,8 @@
 import sys
 import tensorflow as tf
 
+import udc_metrics
+
 def get_id_feature(features, key, len_key, max_len):
     ids = features[key]
     ids_len = tf.squeeze(features[len_key], [1])
@@ -19,16 +21,16 @@ def create_train_op(loss, hparams):
 
 def create_model_fn(hparams, model_impl):
 
-    def model_fn(features, targets, mode):
+    def model_fn(features, labels, mode):
         context, context_len = get_id_feature(
                 features, 'context', 'context_len', hparams.max_context_len)
 
         utterance, utterance_len = get_id_feature(
                 features, 'utterance', 'utterance_len', hparams.max_utterance_len)
 
-        batch_size = targets.get_shape().as_list()[0]
+        batch_size = labels.get_shape().as_list()[0]
 
-        if mode == tf.contrib.learn.ModeKeys.TRAIN:
+        if mode == tf.estimator.ModeKeys.TRAIN:
             probs, loss = model_impl(
                     hparams,
                     mode,
@@ -36,12 +38,16 @@ def create_model_fn(hparams, model_impl):
                     context_len,
                     utterance,
                     utterance_len,
-                    targets)
+                    labels)
             train_op = create_train_op(loss, hparams)
 
-            return probs, loss, train_op
+            # return probs, loss, train_op
+            return tf.estimator.EstimatorSpec(
+                    mode=mode,
+                    loss=loss,
+                    train_op=train_op)
 
-        if mode == tf.contrib.learn.ModeKeys.INFER:
+        if mode == tf.estimator.ModeKeys.PREDICT:
             probs, loss = model_impl(
                     hparams,
                     mode,
@@ -51,27 +57,27 @@ def create_model_fn(hparams, model_impl):
                     utterance_len,
                     None)
 
-            return probs, 0.0, None
+            # return probs, 0.0, None
 
-        if mode == tf.contrib.learn.ModeKeys.EVAL:
+            return tf.estimator.EstimatorSpec(mode=mode)
+
+        if mode == tf.estimator.ModeKeys.EVAL:
             all_contexts = [context]
             all_context_lens = [context_len]
             all_utterances = [utterance]
             all_utterance_lens = [utterance_len]
-            all_targets = [tf.ones([batch_size, 1], dtype=tf.int64)]
+            all_labels = [tf.ones([batch_size, 1], dtype=tf.int64)]
 
             for i in range(9):
                 distractor, distractor_len = get_id_feature(features,
-                    "distractor_{}".format(i),
-                    "distractor_{}_len".format(i),
+                    'distractor_{}'.format(i),
+                    'distractor_{}_len'.format(i),
                     hparams.max_utterance_len)
                 all_contexts.append(context)
                 all_context_lens.append(context_len)
                 all_utterances.append(distractor)
                 all_utterance_lens.append(distractor_len)
-                all_targets.append(
-                tf.zeros([batch_size, 1], dtype=tf.int64)
-                )
+                all_labels.append(tf.zeros([batch_size, 1], dtype=tf.int64))
 
             probs, loss = model_impl(
                 hparams,
@@ -80,16 +86,30 @@ def create_model_fn(hparams, model_impl):
                 tf.concat(all_context_lens, 0),
                 tf.concat(all_utterances, 0),
                 tf.concat(all_utterance_lens, 0),
-                tf.concat(all_targets, 0))
+                tf.concat(all_labels, 0))
 
             split_probs = tf.split(probs, 10, axis=0)
             shaped_probs = tf.concat(split_probs, 1)
 
-            tf.summary.histogram("eval_correct_probs_hist", split_probs[0])
-            tf.summary.histogram("eval_correct_probs_average", tf.reduce_mean(split_probs[0]))
-            tf.summary.histogram("eval_incorrect_probs_hist", split_probs[1])
-            tf.summary.histogram("eval_incorrect_probs_average", tf.reduce_mean(split_probs[1]))
+            tf.summary.histogram('eval_correct_probs_hist', split_probs[0])
+            tf.summary.histogram('eval_correct_probs_average', tf.reduce_mean(split_probs[0]))
+            tf.summary.histogram('eval_incorrect_probs_hist', split_probs[1])
+            tf.summary.histogram('eval_incorrect_probs_average', tf.reduce_mean(split_probs[1]))
 
-            return shaped_probs, loss, None
+            print('shaped_probs: {}'.format(shaped_probs.get_shape()))
+
+            eval_metrics = {}
+            for k in [1,2,5,10]:
+                eval_metrics['recall_at_{}'.format(k)] = \
+                        tf.contrib.metrics.streaming_sparse_recall_at_k(
+                            shaped_probs, 
+                            tf.zeros([batch_size, 1], dtype=tf.int64), k=k
+                            )
+
+            return tf.estimator.EstimatorSpec(
+                    mode=mode,
+                    loss=loss,
+                    train_op=None,
+                    eval_metric_ops=eval_metrics)
 
     return model_fn

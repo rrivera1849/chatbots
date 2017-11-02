@@ -34,31 +34,34 @@ def main(unused_argv):
         hparams,
         model_impl=dual_encoder_model)
 
-    estimator = tf.contrib.learn.Estimator(
+    estimator = tf.estimator.Estimator(
         model_fn=model_fn,
         model_dir=MODEL_DIR,
-        config=tf.contrib.learn.RunConfig())
+        config=tf.estimator.RunConfig())
 
     input_fn_train = udc_inputs.create_input_fn(
-        mode=tf.contrib.learn.ModeKeys.TRAIN,
+        mode=tf.estimator.ModeKeys.TRAIN,
         input_files=[TRAIN_FILE],
         batch_size=hparams.batch_size,
         num_epochs=FLAGS.num_epochs)
 
     input_fn_eval = udc_inputs.create_input_fn(
-        mode=tf.contrib.learn.ModeKeys.EVAL,
+        mode=tf.estimator.ModeKeys.EVAL,
         input_files=[VALIDATION_FILE],
         batch_size=hparams.eval_batch_size,
         num_epochs=1)
 
-    eval_metrics = udc_metrics.create_evaluation_metrics()
+    # eval_metrics = udc_metrics.create_evaluation_metrics()
     
-    eval_monitor = tf.contrib.learn.monitors.ValidationMonitor(
-            input_fn=input_fn_eval,
-            every_n_steps=FLAGS.eval_every,
-            metrics=eval_metrics)
-    hooks = tf.contrib.learn.monitors.replace_monitors_with_hooks([eval_monitor], estimator)
-    estimator.fit(input_fn=input_fn_train, steps=None, monitors=[eval_monitor])
+    # eval_monitor = tf.contrib.learn.monitors.ValidationMonitor(
+            # input_fn=input_fn_eval,
+            # every_n_steps=FLAGS.eval_every,
+            # metrics=eval_metrics)
+    # hooks = tf.contrib.learn.monitors.replace_monitors_with_hooks([eval_monitor], estimator)
+    # estimator.fit(input_fn=input_fn_train, steps=None, monitors=[eval_monitor])
+
+    estimator.train(input_fn=input_fn_train, steps=100)
+    estimator.evaluate(input_fn=input_fn_eval, steps=None)
 
 if __name__ == '__main__':
     tf.app.run()

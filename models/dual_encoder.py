@@ -33,6 +33,10 @@ def dual_encoder_model(
     utterance_embedded = tf.nn.embedding_lookup(embeddings_W,
             utterance, name='embed_utterance')
 
+    print('context_embedded: {}'.format(context_embedded.get_shape()))
+    print('utterance_embedded: {}'.format(utterance_embedded.get_shape()))
+    print('targets: {}'.format(targets.get_shape()))
+
     with tf.variable_scope('rnn') as vs:
         cell = tf.nn.rnn_cell.LSTMCell(
                 hparams.rnn_dim,
@@ -45,26 +49,29 @@ def dual_encoder_model(
                 tf.concat([context_embedded, utterance_embedded], 0),
                 sequence_length=tf.concat([context_len, utterance_len], 0),
                 dtype=tf.float32)
+        print('rnn_states.h: {}'.format(rnn_states.h.get_shape()))
         encoding_context, encoding_utterance = tf.split(rnn_states.h, 2, axis=0)
+        print('encoding_context: {}'.format(encoding_context.get_shape()))
+        print('encoding_utterance: {}'.format(encoding_utterance.get_shape()))
 
-        with tf.variable_scope('prediction') as vs:
-            M = tf.get_variable('M',
-                    shape=[hparams.rnn_dim, hparams.rnn_dim],
-                    initializer=tf.truncated_normal_initializer())
+    with tf.variable_scope('prediction') as vs:
+        M = tf.get_variable('M',
+                shape=[hparams.rnn_dim, hparams.rnn_dim],
+                initializer=tf.truncated_normal_initializer())
 
-            generated_response = tf.matmul(encoding_context, M)
-            generated_response = tf.expand_dims(generated_response, 2)
-            encoding_utterance = tf.expand_dims(encoding_utterance, 2)
+        print('M: {}'.format(M.get_shape()))
+        generated_response = tf.matmul(encoding_context, M)
+        generated_response = tf.expand_dims(generated_response, 2)
+        encoding_utterance = tf.expand_dims(encoding_utterance, 2)
+        print('generated_response: {}'.format(generated_response.get_shape()))
+        print('encoding_utterance: {}'.format(encoding_utterance.get_shape()))
 
-            logits = tf.matmul(generated_response, encoding_utterance, True)
-            logits = tf.squeeze(logits, [2])
+        logits = tf.matmul(generated_response, encoding_utterance, True)
+        print('logits: {}'.format(logits.get_shape()))
+        logits = tf.squeeze(logits, [2])
 
-            probs = tf.sigmoid(logits)
+        probs = tf.sigmoid(logits)
+        losses = tf.losses.sigmoid_cross_entropy(tf.to_float(targets), logits)
 
-            if mode == tf.contrib.learn.ModeKeys.INFER:
-                return probs, None
-
-            losses = tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=tf.to_float(targets))
-
-        mean_loss = tf.reduce_mean(losses, name='mean_loss')
-        return probs, mean_loss
+    mean_loss = tf.reduce_mean(losses, name='mean_loss')
+    return probs, mean_loss

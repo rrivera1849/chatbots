@@ -43,10 +43,10 @@ def create_input_fn(mode, input_files, batch_size, num_epochs):
                 queue_capacity=200000 + batch_size * 10,
                 name='read_batch_features_{}'.format(mode))
 
-        # if mode == tf.contrib.learn.ModeKeys.TRAIN:
-            # tf.get_variable(
-                # "read_batch_features_eval/file_name_queue/limit_epochs/epochs",
-                # initializer=tf.constant(0, dtype=tf.int64))
+        if mode == tf.contrib.learn.ModeKeys.TRAIN:
+            tf.get_variable(
+                "read_batch_features_eval/file_name_queue/limit_epochs/epochs",
+                initializer=tf.constant(0, dtype=tf.int64))
 
         if mode == tf.contrib.learn.ModeKeys.TRAIN:
             target = feature_map.pop('label')
