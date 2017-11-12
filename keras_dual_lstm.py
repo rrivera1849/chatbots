@@ -1,7 +1,7 @@
 
 import os
 import json
-import sys
+import pickle
 from optparse import OptionParser
 
 import keras
@@ -119,4 +119,15 @@ checkpointer = ModelCheckpoint(filepath, save_best_only=True, monitor='loss', mo
 # Create a callback to evaluate on our validation data every epoch
 evaluate_model_cb = keras.callbacks.LambdaCallback(on_epoch_begin=lambda epoch, logs: evaluate_on_validation(epoch, logs, model))
 
-model.fit([contexts, utterances], labels, batch_size=options.batch_size, epochs=options.num_epochs, callbacks=[checkpointer, evaluate_model_cb])
+# Add callback to save Loss History
+class LossHistory(keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+        
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
+loss_history = LossHistory()
+
+# Train the model
+model.fit([contexts, utterances], labels, batch_size=options.batch_size, epochs=options.num_epochs, callbacks=[checkpointer, evaluate_model_cb, loss_history])
+pickle.dump(loss_history.losses, open('dual_lstm_loss_history.pkl', 'wb'))
