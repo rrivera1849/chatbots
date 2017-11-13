@@ -130,4 +130,4 @@ loss_history = LossHistory()
 
 # Train the model
 model.fit([contexts, utterances], labels, batch_size=options.batch_size, epochs=options.num_epochs, callbacks=[checkpointer, evaluate_model_cb, loss_history])
-pickle.dump(loss_history.losses, open('dual_lstm_loss_history.pkl', 'wb'))
+pickle.dump(loss_history.losses, open('dual_encoder_loss_history.pkl', 'wb'))
