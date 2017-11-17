@@ -11,7 +11,7 @@ from scipy.sparse import csr_matrix
 dataset_path = './datasets/generative'
 rnn_dim = 256
 batch_size = 128
-num_epochs = 10
+num_epochs = 100
 num_samples = 50000
 text_path = os.path.join(dataset_path, 'twitter_en.txt')
 
@@ -86,8 +86,18 @@ decoder_outputs = decoder_dense(decoder_outputs)
 model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
 model.compile(optimizer='adam', loss='categorical_crossentropy')
 
+class LossHistory(keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+        
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
+loss_history = LossHistory()
 model_checkpoint = keras.callbacks.ModelCheckpoint('weights.{epoch:02d}-{val_loss:.2f}.hdf5', monitor='val_loss', save_best_only=True)
+
 model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
         epochs=num_epochs,
         validation_split=0.2,
-        callbacks=[model_checkpoint])
+        callbacks=[model_checkpoint, loss_history])
+
+pickle.dump(loss_history.losses, open('seq2seq_loss_history', 'wb'))
