@@ -28,7 +28,9 @@ def build_vocabulary(dataset, min_word_frequency):
 
     vocabulary = dict(zip(words, range(len(words))))
     vocabulary['<UNK>'] = len(words)
-    vocabulary['<PAD>'] = len(words) + 1
+    vocabulary['<PAD>'] = len(words) 
+    vocabulary['<SOL>'] = len(words)
+    vocabulary['<EOL>'] = len(words)
     return vocabulary
 
 def dialog_to_idx(dialog, vocabulary):
