@@ -14,7 +14,7 @@ import numpy as np
 
 parser = OptionParser()
 
-parser.add_option('--num-epochs', type=int, default=10,
+parser.add_option('--num-epochs', type=int, default=5,
                   help='Number of epochs to use during training')
 parser.add_option('--batch-size', type=int, default=128,
                   help='Number of batches to use during training and evaluation')
@@ -32,7 +32,7 @@ parser.add_option('--max-utterance-length', type=int, default=80,
 
 (options, args) = parser.parse_args()
 
-dataset_path = 'datasets/ubuntu_2.0'
+dataset_path = 'datasets/preprocessed'
 train_path = os.path.join(dataset_path, 'train_preprocessed.json')
 validation_path = os.path.join(dataset_path, 'validation_preprocessed.json')
 vocabulary_path = os.path.join(dataset_path, 'vocabulary.json')
@@ -97,6 +97,7 @@ def recall_at_k(predictions, target=0, k=[1,2,5,10]):
 
     return results
 
+all_results = {}
 def evaluate_on_validation(epoch, logs, model):
     print('[{}/{}] Evaluating on validation:'.format(epoch, options.num_epochs))
 
@@ -106,6 +107,7 @@ def evaluate_on_validation(epoch, logs, model):
         predictions = np.concatenate((predictions, current_predictions), axis=1)
 
     results = recall_at_k(predictions)
+    all_results[epoch] = results
     for k, v in results.items():
         print('\t{}: {}'.format(k,v))
 
@@ -131,3 +133,4 @@ loss_history = LossHistory()
 # Train the model
 model.fit([contexts, utterances], labels, batch_size=options.batch_size, epochs=options.num_epochs, callbacks=[checkpointer, evaluate_model_cb, loss_history])
 pickle.dump(loss_history.losses, open('dual_encoder_loss_history.pkl', 'wb'))
+pickle.dump(all_results, open('dual_encoder_all_results.pkl', 'wb'))

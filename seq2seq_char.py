@@ -12,8 +12,8 @@ from scipy.sparse import csr_matrix
 dataset_path = './datasets/generative'
 rnn_dim = 256
 batch_size = 128
-num_epochs = 1
-num_samples = 50000
+num_epochs = 100
+num_samples = 5000
 text_path = os.path.join(dataset_path, 'twitter_en.txt')
 
 input_texts = []
@@ -60,18 +60,12 @@ decoder_target_data = np.zeros(
 
 for i, (input_text, target_text) in enumerate(zip(input_texts, target_texts)):
     for t, char in enumerate(input_text):
-        if t >= max_encoder_seq_len:
-            continue
-
         encoder_input_data[i, t, input_token_index[char]] = 1
 
     for t, char in enumerate(target_text):
-        if t >= max_decoder_seq_len:
-            continue
-
         decoder_input_data[i, t, target_token_index[char]] = 1
         if t > 0:
-            decoder_target_data[i, t, target_token_index[char]] = 1
+            decoder_target_data[i, t-1, target_token_index[char]] = 1
 
 encoder_inputs = Input(shape=(None, num_encoder_tokens))
 encoder = LSTM(rnn_dim, return_state=True)
