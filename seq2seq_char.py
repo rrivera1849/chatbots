@@ -1,26 +1,32 @@
 
+import os
+import pickle
+import numpy as np
+from optparse import OptionParser
+
 import keras
 from keras.models import Model
 from keras.layers import Input, LSTM, Dense, Embedding
 from keras.preprocessing.sequence import pad_sequences
 
-import os
-import pickle
-import numpy as np
-from scipy.sparse import csr_matrix
+parser = OptionParser()
 
-dataset_path = './datasets/generative'
-rnn_dim = 256
-batch_size = 128
-num_epochs = 100
-num_samples = 5000
-text_path = os.path.join(dataset_path, 'twitter_en.txt')
+parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./datasets/generative')
+parser.add_option('--num-samples', dest='num_samples', type=int, default=5000)
+
+parser.add_option('--rnn-dim', dest='rnn_dim', type=int, default=256)
+parser.add_option('--batch-size', dest='batch_size', type=int, default=128)
+parser.add_option('--num-epochs', dest='num_epochs', type=int, default=100)
+
+(options, args) = parser.parse_args()
+
+text_path = os.path.join(options.dataset_path, 'twitter_en.txt')
 
 input_texts = []
 target_texts = []
 input_characters = set()
 target_characters = set()
-lines = open(text_path, 'r').read().split('\n')[:num_samples * 2]
+lines = open(text_path, 'r').read().split('\n')[:options.num_samples * 2]
 for i, (input_text, target_text) in enumerate(zip(lines[::2], lines[1::2])):
     target_text = '\t' + target_text + '\n'
     input_texts.append(input_text)
@@ -68,12 +74,12 @@ for i, (input_text, target_text) in enumerate(zip(input_texts, target_texts)):
             decoder_target_data[i, t-1, target_token_index[char]] = 1
 
 encoder_inputs = Input(shape=(None, num_encoder_tokens))
-encoder = LSTM(rnn_dim, return_state=True)
+encoder = LSTM(options.rnn_dim, return_state=True)
 encoder_outputs, state_h, state_c = encoder(encoder_inputs)
 encoder_states = [state_h, state_c]
 
 decoder_inputs = Input(shape=(None, num_decoder_tokens))
-decoder = LSTM(rnn_dim, return_sequences=True, return_state=True)
+decoder = LSTM(options.rnn_dim, return_sequences=True, return_state=True)
 decoder_outputs, _, _ = decoder(decoder_inputs, initial_state=encoder_states)
 decoder_dense = Dense(num_decoder_tokens, activation='softmax')
 decoder_outputs = decoder_dense(decoder_outputs)
@@ -92,9 +98,9 @@ loss_history = LossHistory()
 model_checkpoint = keras.callbacks.ModelCheckpoint('weights.{epoch:02d}-{val_loss:.2f}.hdf5', monitor='val_loss', save_best_only=True)
 
 history = model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
-                    epochs=num_epochs,
+                    epochs=options.num_epochs,
                     validation_split=0.2,
-                    batch_size=batch_size,
+                    batch_size=options.batch_size,
                     callbacks=[loss_history])
                     # callbacks=[model_checkpoint, loss_history])
 
@@ -111,8 +117,8 @@ pickle.dump(losses, open('seq2seq_loss_history.pkl', 'wb'))
 # Define sampling models
 encoder_model = Model(encoder_inputs, encoder_states)
 
-decoder_state_input_h = Input(shape=(rnn_dim,))
-decoder_state_input_c = Input(shape=(rnn_dim,))
+decoder_state_input_h = Input(shape=(options.rnn_dim,))
+decoder_state_input_c = Input(shape=(options.rnn_dim,))
 decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
 decoder_outputs, state_h, state_c = decoder(decoder_inputs, initial_state=decoder_states_inputs)
 decoder_states = [state_h, state_c]
