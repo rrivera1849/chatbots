@@ -20,8 +20,10 @@ parser.add_option('--num-epochs', dest='num_epochs', type=int, default=100)
 
 (options, args) = parser.parse_args()
 
+################################################################
+# Data Preprocessing BEGIN
+################################################################
 text_path = os.path.join(options.dataset_path, 'twitter_en.txt')
-
 input_texts = []
 target_texts = []
 input_characters = set()
@@ -45,15 +47,22 @@ num_decoder_tokens = len(target_characters)
 max_encoder_seq_len = max([len(x) for x in input_texts]) 
 max_decoder_seq_len = max([len(x) for x in target_texts])
 
+# Lookup to get index given a character
+input_token_index = dict([(char, i) for i, char in enumerate(input_characters)])
+target_token_index = dict([(char, i) for i, char in enumerate(target_characters)])
+
+# Reverse lookup to decode sequences back into characters
+reverse_input_char_index = dict((i, char) for char, i in input_token_index.items())
+reverse_target_char_index = dict((i, char) for char, i in target_token_index.items())
+
 print('Number of samples:', len(input_texts))
 print('Number of unique input tokens:', num_encoder_tokens)
 print('Number of unique output tokens:', num_decoder_tokens)
 print('Max sequence length for inputs:', max_encoder_seq_len)
-print('Max sequence lenght for outputs:', max_decoder_seq_len)
-
-input_token_index = dict([(char, i) for i, char in enumerate(input_characters)])
-target_token_index = dict([(char, i) for i, char in enumerate(target_characters)])
-
+print('Max sequence length for outputs:', max_decoder_seq_len)
+################################################################
+# Data Preprocessing END
+################################################################
 encoder_input_data = np.zeros(
         (len(input_texts), max_encoder_seq_len, num_encoder_tokens), 
         dtype='float32')
@@ -73,22 +82,50 @@ for i, (input_text, target_text) in enumerate(zip(input_texts, target_texts)):
         if t > 0:
             decoder_target_data[i, t-1, target_token_index[char]] = 1
 
-encoder_inputs = Input(shape=(None, num_encoder_tokens))
-encoder = LSTM(options.rnn_dim, return_state=True)
-encoder_outputs, state_h, state_c = encoder(encoder_inputs)
-encoder_states = [state_h, state_c]
+def build_seq2seq(rnn_dim, num_encoder_tokens, num_decoder_tokens, sampling=True):
+    """Builds a basic Seq2Seq model.
 
-decoder_inputs = Input(shape=(None, num_decoder_tokens))
-decoder = LSTM(options.rnn_dim, return_sequences=True, return_state=True)
-decoder_outputs, _, _ = decoder(decoder_inputs, initial_state=encoder_states)
-decoder_dense = Dense(num_decoder_tokens, activation='softmax')
-decoder_outputs = decoder_dense(decoder_outputs)
+    Keyword Arguments:
+        rnn_dim: hidden dimensionality of the LSTM cells
+        num_encoder_tokens: total number of tokens in the encoder input
+        num_decoder_tokens: total number of tokens in the decoder input
+        sampling: if true, will define models that can be used to sample
+    """
+    # TODO: Add depth parameter
+    encoder_inputs = Input(shape=(None, num_encoder_tokens))
+    encoder = LSTM(rnn_dim, return_state=True)
+    encoder_outputs, state_h, state_c = encoder(encoder_inputs)
+    encoder_states = [state_h, state_c]
 
-model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+    decoder_inputs = Input(shape=(None, num_decoder_tokens))
+    decoder = LSTM(rnn_dim, return_sequences=True, return_state=True)
+    decoder_outputs, _, _= decoder(decoder_inputs, initial_state=encoder_states)
+    decoder_dense = Dense(num_decoder_tokens, activation='softmax')
+    decoder_outputs = decoder_dense(decoder_outputs)
+
+    model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+
+    if sampling:
+        encoder_model = Model(encoder_inputs, encoder_states)
+
+        decoder_state_input_h = Input(shape=(rnn_dim,))
+        decoder_state_input_c = Input(shape=(rnn_dim,))
+        decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+        decoder_outputs, state_h, state_c = decoder(decoder_inputs, initial_state=decoder_states_inputs)
+        decoder_states = [state_h, state_c]
+        decoder_outputs = decoder_dense(decoder_outputs)
+        decoder_model = Model(
+            [decoder_inputs] + decoder_states_inputs,
+            [decoder_outputs] + decoder_states)
+
+        return model, encoder_model, decoder_model
+
+    return model
+
+model, encoder_model, decoder_model = build_encoder_model(options.rnn_dim, num_encoder_tokens, num_decoder_tokens)
 model.compile(optimizer='adam', loss='categorical_crossentropy')
 
-class LossHistory(keras.callbacks.Callback):
-    def on_train_begin(self, logs={}):
+class LossHistory(keras.callbacks.Callback): def on_train_begin(self, logs={}):
         self.losses = []
         
     def on_batch_end(self, batch, logs={}):
@@ -113,25 +150,15 @@ pickle.dump(losses, open('seq2seq_loss_history.pkl', 'wb'))
 # 1. Encode the input and retrieve the initial decoder state
 # 2. Run one step of the decoder with this initial state and the SOL token
 # 3. Repeat with the current target token and current states
+def decode_sequence(encoder_model, decoder_model, input_seq):
+    """Given an |encoder_model| and a |decoder_model| built for sampling. This 
+       method will decode a sequence given the |input_seq|
 
-# Define sampling models
-encoder_model = Model(encoder_inputs, encoder_states)
-
-decoder_state_input_h = Input(shape=(options.rnn_dim,))
-decoder_state_input_c = Input(shape=(options.rnn_dim,))
-decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
-decoder_outputs, state_h, state_c = decoder(decoder_inputs, initial_state=decoder_states_inputs)
-decoder_states = [state_h, state_c]
-decoder_outputs = decoder_dense(decoder_outputs)
-decoder_model = Model(
-        [decoder_inputs] + decoder_states_inputs,
-        [decoder_outputs] + decoder_states)
-
-# Reverse lookup to decode sequences back into characters
-reverse_input_char_index = dict((i, char) for char, i in input_token_index.items())
-reverse_target_char_index = dict((i, char) for char, i in target_token_index.items())
-
-def decode_sequence(input_seq):
+    Keyword Arguments:
+        encoder_model: model used to encode then input sequence into a context vector
+        decoder_model: model used to decode response given context vector
+        input_seq: sequence to use as input
+    """
     # Encode the input as state vectors
     states_value = encoder_model.predict(input_seq)
 
@@ -164,7 +191,7 @@ def decode_sequence(input_seq):
 
 for seq_index in range(10):
     input_seq = encoder_input_data[seq_index: seq_index + 1]
-    decoded_sentence = decode_sequence(input_seq)
+    decoded_sentence = decode_sequence(encoder_model, decoder_model, input_seq)
     print('-')
     print('Input sentence:', input_texts[seq_index])
     print('Decoded sentence:', decoded_sentence)
