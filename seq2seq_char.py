@@ -154,7 +154,8 @@ model, encoder_model, decoder_model = build_seq2seq(options.rnn_dim, num_encoder
 model.compile(optimizer='adam', loss='categorical_crossentropy')
 
 # TODO: Should go on utils file
-class LossHistory(keras.callbacks.Callback): def on_train_begin(self, logs={}):
+class LossHistory(keras.callbacks.Callback): 
+    def on_train_begin(self, logs={}):
         self.losses = []
         
     def on_batch_end(self, batch, logs={}):
