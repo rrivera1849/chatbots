@@ -175,6 +175,8 @@ val_steps_per_epoch = int(math.ceil(float(len(input_texts)) / float(options.batc
 history = model.fit_generator(data_iter, steps_per_epoch, epochs=options.num_epochs, 
                               validation_data=val_iter, validation_steps=val_steps_per_epoch,
                               callbacks=[loss_history, model_checkpoint])
+encoder_model.save('encoder_model.hdf5')
+decoder_model.save('decoder_model.hdf5')
 
 losses = {}
 losses['loss'] = loss_history.losses
