@@ -8,10 +8,12 @@ import keras
 from keras.models import Model
 from keras.layers import Input, LSTM, Dense, Embedding
 
+import utils
+
 parser = OptionParser()
 
 parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./datasets/generative')
-parser.add_option('--num-samples', dest='num_samples', type=int, default=5000)
+parser.add_option('--num-samples', dest='num_samples', type=str, default=None)
 
 parser.add_option('--rnn-dim', dest='rnn_dim', type=int, default=256)
 parser.add_option('--batch-size', dest='batch_size', type=int, default=128)
@@ -27,7 +29,12 @@ input_texts = []
 target_texts = []
 input_characters = set()
 target_characters = set()
-lines = open(text_path, 'r').read().split('\n')[:options.num_samples * 2]
+
+if options.num_samples:
+    lines = open(text_path, 'r').read().split('\n')[:options.num_samples*2]
+else:
+    lines = open(text_path, 'r').read().split('\n')
+
 for i, (input_text, target_text) in enumerate(zip(lines[::2], lines[1::2])):
     target_text = '\t' + target_text + '\n'
     input_texts.append(input_text)
@@ -153,15 +160,7 @@ def build_seq2seq(rnn_dim, num_encoder_tokens, num_decoder_tokens, sampling=True
 model, encoder_model, decoder_model = build_seq2seq(options.rnn_dim, num_encoder_tokens, num_decoder_tokens)
 model.compile(optimizer='adam', loss='categorical_crossentropy')
 
-# TODO: Should go on utils file
-class LossHistory(keras.callbacks.Callback): 
-    def on_train_begin(self, logs={}):
-        self.losses = []
-        
-    def on_batch_end(self, batch, logs={}):
-        self.losses.append(logs.get('loss'))
-
-loss_history = LossHistory()
+loss_history = utils.LossHistory()
 model_checkpoint = keras.callbacks.ModelCheckpoint('weights.{epoch:02d}-{val_loss:.2f}.hdf5', monitor='val_loss', save_best_only=True)
 
 train_iter = get_data_iter(options.num_epochs, options.batch_size, input_texts, target_texts,
@@ -186,6 +185,7 @@ pickle.dump(losses, open('seq2seq_loss_history.pkl', 'wb'))
 # 1. Encode the input and retrieve the initial decoder state
 # 2. Run one step of the decoder with this initial state and the SOL token
 # 3. Repeat with the current target token and current states
+# TODO: Move this to separate file
 def decode_sequence(encoder_model, decoder_model, input_seq):
     """Given an |encoder_model| and a |decoder_model| built for sampling. This 
        method will decode a sequence given the |input_seq|
