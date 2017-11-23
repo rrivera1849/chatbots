@@ -7,7 +7,6 @@ from optparse import OptionParser
 import keras
 from keras.models import Model
 from keras.layers import Input, LSTM, Dense, Embedding
-from keras.preprocessing.sequence import pad_sequences
 
 parser = OptionParser()
 
@@ -47,6 +46,13 @@ num_decoder_tokens = len(target_characters)
 max_encoder_seq_len = max([len(x) for x in input_texts]) 
 max_decoder_seq_len = max([len(x) for x in target_texts])
 
+# Split data into train and validation
+val_split = int(0.2 * len(input_texts))
+val_input_texts = input_texts[val_split:]
+val_target_texts = target_texts[val_split:]
+input_texts = input_texts[:val_split]
+target_texts = target_texts[:val_split]
+
 # Lookup to get index given a character
 input_token_index = dict([(char, i) for i, char in enumerate(input_characters)])
 target_token_index = dict([(char, i) for i, char in enumerate(target_characters)])
@@ -63,24 +69,46 @@ print('Max sequence length for outputs:', max_decoder_seq_len)
 ################################################################
 # Data Preprocessing END
 ################################################################
-encoder_input_data = np.zeros(
-        (len(input_texts), max_encoder_seq_len, num_encoder_tokens), 
-        dtype='float32')
-decoder_input_data = np.zeros(
-        (len(input_texts), max_decoder_seq_len, num_decoder_tokens),
-        dtype='float32')
-decoder_target_data = np.zeros(
-        (len(input_texts), max_decoder_seq_len, num_decoder_tokens),
-        dtype='float32')
 
-for i, (input_text, target_text) in enumerate(zip(input_texts, target_texts)):
-    for t, char in enumerate(input_text):
-        encoder_input_data[i, t, input_token_index[char]] = 1
+def get_data_iter(num_epochs, batch_size,
+                 input_texts, target_texts, 
+                 max_encoder_seq_len, num_encoder_tokens,
+                 max_decoder_seq_len, num_decoder_tokens, 
+                 shuffle=True):
+    """Creates a data iterator that can be used to feed in batches of data to the 
+       Seq2Seq model.
+    """
+    num_samples = len(input_texts)
+    num_batches_per_epoch = int(math.floor(float(num_samples) / float(batch_size)))
 
-    for t, char in enumerate(target_text):
-        decoder_input_data[i, t, target_token_index[char]] = 1
-        if t > 0:
-            decoder_target_data[i, t-1, target_token_index[char]] = 1
+    for epoch in range(num_epochs):
+        perm = np.random.permutation(len(input_text))
+
+        for batch in range(num_batches_per_epoch):
+            start = batch * batch_size
+            end = min(start + batch_size, len(input_text))
+
+            encoder_input_data = np.zeros(
+                    (end - start, max_encoder_seq_len, num_encoder_tokens), 
+                    dtype='float32')
+            decoder_input_data = np.zeros(
+                    (end - start, max_decoder_seq_len, num_decoder_tokens),
+                    dtype='float32')
+            decoder_target_data = np.zeros(
+                    (end - start, max_decoder_seq_len, num_decoder_tokens),
+                    dtype='float32')
+
+            for i, (input_text, target_text) in enumerate(zip(input_texts[start:end], target_texts[start:end])):
+                for t, char in enumerate(input_text):
+                    encoder_input_data[i, t, input_token_index[char]] = 1
+
+                for t, char in enumerate(target_text):
+                    decoder_input_data[i, t, target_token_index[char]] = 1
+                    if t > 0:
+                        decoder_target_data[i, t-1, target_token_index[char]] = 1
+
+            yield ([encoder_input_data, decoder_input_data], decoder_target_data)
+            start = end
 
 def build_seq2seq(rnn_dim, num_encoder_tokens, num_decoder_tokens, sampling=True):
     """Builds a basic Seq2Seq model.
@@ -122,9 +150,10 @@ def build_seq2seq(rnn_dim, num_encoder_tokens, num_decoder_tokens, sampling=True
 
     return model
 
-model, encoder_model, decoder_model = build_encoder_model(options.rnn_dim, num_encoder_tokens, num_decoder_tokens)
+model, encoder_model, decoder_model = build_seq2seq(options.rnn_dim, num_encoder_tokens, num_decoder_tokens)
 model.compile(optimizer='adam', loss='categorical_crossentropy')
 
+# TODO: Should go on utils file
 class LossHistory(keras.callbacks.Callback): def on_train_begin(self, logs={}):
         self.losses = []
         
@@ -134,12 +163,18 @@ class LossHistory(keras.callbacks.Callback): def on_train_begin(self, logs={}):
 loss_history = LossHistory()
 model_checkpoint = keras.callbacks.ModelCheckpoint('weights.{epoch:02d}-{val_loss:.2f}.hdf5', monitor='val_loss', save_best_only=True)
 
-history = model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
-                    epochs=options.num_epochs,
-                    validation_split=0.2,
-                    batch_size=options.batch_size,
-                    callbacks=[loss_history])
-                    # callbacks=[model_checkpoint, loss_history])
+train_iter = get_data_iter(options.num_epochs, options.batch_size, input_texts, target_texts,
+                           max_encoder_seq_len, num_encoder_tokens, max_decoder_seq_len, max_decoder_tokens)
+
+val_iter = get_data_iter(options.num_epochs, options.batch_size, val_input_texts, val_target_texts,
+                         max_encoder_seq_len, num_encoder_tokens, max_decoder_seq_len, max_decoder_tokens)
+
+train_steps_per_epoch = int(math.ceil(float(len(input_texts)) / float(options.batch_size)))
+val_steps_per_epoch = int(math.ceil(float(len(input_texts)) / float(options.batch_size)))
+
+history = model.fit_generator(data_iter, steps_per_epoch, epochs=options.num_epochs, 
+                              validation_data=val_iter, validation_steps=val_steps_per_epoch,
+                              callbacks=[loss_history, model_checkpoint])
 
 losses = {}
 losses['loss'] = loss_history.losses
