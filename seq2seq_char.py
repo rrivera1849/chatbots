@@ -1,5 +1,6 @@
 
 import os
+import math
 import pickle
 import numpy as np
 from optparse import OptionParser
@@ -13,7 +14,7 @@ import utils
 parser = OptionParser()
 
 parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./datasets/generative')
-parser.add_option('--num-samples', dest='num_samples', type=str, default=None)
+parser.add_option('--num-samples', dest='num_samples', type=int, default=None)
 
 parser.add_option('--rnn-dim', dest='rnn_dim', type=int, default=256)
 parser.add_option('--batch-size', dest='batch_size', type=int, default=128)
@@ -55,10 +56,10 @@ max_decoder_seq_len = max([len(x) for x in target_texts])
 
 # Split data into train and validation
 val_split = int(0.2 * len(input_texts))
-val_input_texts = input_texts[val_split:]
-val_target_texts = target_texts[val_split:]
-input_texts = input_texts[:val_split]
-target_texts = target_texts[:val_split]
+val_input_texts = input_texts[:val_split]
+val_target_texts = target_texts[:val_split]
+input_texts = input_texts[val_split:]
+target_texts = target_texts[val_split:]
 
 # Lookup to get index given a character
 input_token_index = dict([(char, i) for i, char in enumerate(input_characters)])
@@ -68,7 +69,10 @@ target_token_index = dict([(char, i) for i, char in enumerate(target_characters)
 reverse_input_char_index = dict((i, char) for char, i in input_token_index.items())
 reverse_target_char_index = dict((i, char) for char, i in target_token_index.items())
 
-print('Number of samples:', len(input_texts))
+assert len(input_characters) == len(input_token_index) == num_encoder_tokens
+assert len(target_characters) == len(target_token_index) == num_decoder_tokens 
+
+print('Number of samples:', len(input_texts) + len(val_input_texts))
 print('Number of unique input tokens:', num_encoder_tokens)
 print('Number of unique output tokens:', num_decoder_tokens)
 print('Max sequence length for inputs:', max_encoder_seq_len)
@@ -86,14 +90,14 @@ def get_data_iter(num_epochs, batch_size,
        Seq2Seq model.
     """
     num_samples = len(input_texts)
-    num_batches_per_epoch = int(math.floor(float(num_samples) / float(batch_size)))
+    num_batches_per_epoch = int(math.floor(float(num_samples) / float(batch_size))) + 1
 
     for epoch in range(num_epochs):
-        perm = np.random.permutation(len(input_text))
+        perm = np.random.permutation(len(input_texts))
 
         for batch in range(num_batches_per_epoch):
             start = batch * batch_size
-            end = min(start + batch_size, len(input_text))
+            end = min(start + batch_size, len(input_texts))
 
             encoder_input_data = np.zeros(
                     (end - start, max_encoder_seq_len, num_encoder_tokens), 
@@ -115,7 +119,6 @@ def get_data_iter(num_epochs, batch_size,
                         decoder_target_data[i, t-1, target_token_index[char]] = 1
 
             yield ([encoder_input_data, decoder_input_data], decoder_target_data)
-            start = end
 
 def build_seq2seq(rnn_dim, num_encoder_tokens, num_decoder_tokens, sampling=True):
     """Builds a basic Seq2Seq model.
@@ -161,26 +164,31 @@ model, encoder_model, decoder_model = build_seq2seq(options.rnn_dim, num_encoder
 model.compile(optimizer='adam', loss='categorical_crossentropy')
 
 loss_history = utils.LossHistory()
-model_checkpoint = keras.callbacks.ModelCheckpoint('weights.{epoch:02d}-{val_loss:.2f}.hdf5', monitor='val_loss', save_best_only=True)
+# model_checkpoint = keras.callbacks.ModelCheckpoint('checkpoints/weights.{epoch:02d}-{val_loss:.2f}.hdf5', monitor='val_loss', save_best_only=True)
 
 train_iter = get_data_iter(options.num_epochs, options.batch_size, input_texts, target_texts,
-                           max_encoder_seq_len, num_encoder_tokens, max_decoder_seq_len, max_decoder_tokens)
+                           max_encoder_seq_len, num_encoder_tokens, max_decoder_seq_len, num_decoder_tokens)
 
-val_iter = get_data_iter(options.num_epochs, options.batch_size, val_input_texts, val_target_texts,
-                         max_encoder_seq_len, num_encoder_tokens, max_decoder_seq_len, max_decoder_tokens)
+# val_iter = get_data_iter(options.num_epochs, options.batch_size, val_input_texts, val_target_texts,
+                         # max_encoder_seq_len, num_encoder_tokens, max_decoder_seq_len, num_decoder_tokens)
 
-train_steps_per_epoch = int(math.ceil(float(len(input_texts)) / float(options.batch_size)))
-val_steps_per_epoch = int(math.ceil(float(len(input_texts)) / float(options.batch_size)))
+train_steps_per_epoch = int(math.floor(float(len(input_texts)) / float(options.batch_size))) + 1 
+# val_steps_per_epoch = int(math.floor(float(len(val_input_texts)) / float(options.batch_size))) + 1
 
-history = model.fit_generator(data_iter, steps_per_epoch, epochs=options.num_epochs, 
-                              validation_data=val_iter, validation_steps=val_steps_per_epoch,
-                              callbacks=[loss_history, model_checkpoint])
-encoder_model.save('encoder_model.hdf5')
-decoder_model.save('decoder_model.hdf5')
+print('train_steps_per_epoch: {}'.format(train_steps_per_epoch))
+# print('val_steps_per_epoch: {}'.format(val_steps_per_epoch))
+
+history = model.fit_generator(train_iter, train_steps_per_epoch, epochs=options.num_epochs,
+                              callbacks=[loss_history])
+                              # callbacks=[loss_history, model_checkpoint])
+                              # validation_data=val_iter, validation_steps=val_steps_per_epoch,
+model.save('checkpoints/model.hdf5')
+encoder_model.save('checkpoints/encoder_model.hdf5')
+decoder_model.save('checkpoints/decoder_model.hdf5')
 
 losses = {}
 losses['loss'] = loss_history.losses
-losses['val_loss'] = history.history['val_loss']
+# losses['val_loss'] = history.history['val_loss']
 pickle.dump(losses, open('seq2seq_loss_history.pkl', 'wb'))
 
 # Inference Mode:
@@ -227,25 +235,32 @@ def decode_sequence(encoder_model, decoder_model, input_seq):
 
     return decoded_sentence
 
-for seq_index in range(10):
-    input_seq = encoder_input_data[seq_index: seq_index + 1]
-    decoded_sentence = decode_sequence(encoder_model, decoder_model, input_seq)
-    print('-')
-    print('Input sentence:', input_texts[seq_index])
-    print('Decoded sentence:', decoded_sentence)
+# data_iter = get_data_iter(options.num_epochs, options.batch_size, input_texts, target_texts,
+                          # max_encoder_seq_len, num_encoder_tokens, max_decoder_seq_len, num_decoder_tokens)
+# for i in range(10):
+    # input_seq = np.zeros((1, max_encoder_seq_len, num_encoder_tokens))
+    # for t, char in enumerate(input_texts[i]):
+        # input_seq[0][t][input_token_index[char]] = 1
+        # if t >= max_encoder_seq_len:
+            # break
 
-while True:
-    print('-')
-    user_input = input('Speak to the chatbot!\n')
-    if len(user_input) <= 0:
-        break
+    # decoded_sentence = decode_sequence(encoder_model, decoder_model, input_seq)
+    # print('-')
+    # print('Input sentence:', input_texts[i])
+    # print('Decoded sentence:', decoded_sentence)
 
-    input_seq = np.zeros((1, max_encoder_seq_len, num_encoder_tokens))
-    for t, char in enumerate(user_input):
-        input_seq[0][t][input_token_index[char]] = 1
-        if t >= max_encoder_seq_len:
-            break
+# while True:
+    # print('-')
+    # user_input = input('Speak to the chatbot!\n')
+    # if len(user_input) <= 0:
+        # break
 
-    decoded_sentence = decode_sequence(input_seq)
-    print('>>> ', user_input)
-    print('<<< ', decoded_sentence)
+    # input_seq = np.zeros((1, max_encoder_seq_len, num_encoder_tokens))
+    # for t, char in enumerate(user_input):
+        # input_seq[0][t][input_token_index[char]] = 1
+        # if t >= max_encoder_seq_len:
+            # break
+
+    # decoded_sentence = decode_sequence(encoder_model, decoder_model, input_seq)
+    # print('>>> ', user_input)
+    # print('<<< ', decoded_sentence)
