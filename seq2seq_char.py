@@ -66,7 +66,6 @@ def build_seq2seq(rnn_dim, num_encoder_tokens, num_decoder_tokens, depth=2, samp
     """
     # TODO: Add depth parameter
     encoder_inputs = Input(shape=(None, num_encoder_tokens))
-    encoder = Sequential()
     encoder = LSTM(rnn_dim, return_state=True, input_shape=(None, num_encoder_tokens))
     encoder_outputs, state_h, state_c = encoder(encoder_inputs)
     encoder_states = [state_h, state_c]

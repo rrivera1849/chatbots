@@ -27,32 +27,42 @@ def build_vocabulary(dataset, min_word_frequency):
     words = [word for word, count in word_count.items() if count >= min_word_frequency]
 
     vocabulary = dict(zip(words, range(len(words))))
-    vocabulary['<UNK>'] = len(words)
-    vocabulary['<PAD>'] = len(words) 
-    vocabulary['<SOL>'] = len(words)
-    vocabulary['<EOL>'] = len(words)
+    vocabulary['<UNK>'] = len(vocabulary)
+    vocabulary['<SOL>'] = len(vocabulary)
+    vocabulary['<EOL>'] = len(vocabulary)
+    vocabulary['<PAD>'] = len(vocabulary) 
     return vocabulary
 
 def dialog_to_idx(dialog, vocabulary):
-    for i, word in enumerate(dialog):
-        dialog[i] = vocabulary.get(word, vocabulary['<UNK>'])
+    result = []
 
+    for i, word in enumerate(dialog):
+        result.append(vocabulary.get(word, vocabulary['<UNK>']))
+    result = [vocabulary['<SOL>']] + result + [vocabulary['<EOL>']]
+
+    return result
 
 def dataset_to_idx(dataset, vocabulary):
     logging.info('Converting dataset words to vocabulary indexes')
+    result = []
+
     pbar = tqdm(total=len(dataset))
-    for dialog_1, dialog_2 in dataset:
-        dialog_to_idx(dialog_1, vocabulary)
-        dialog_to_idx(dialog_2, vocabulary)
+    for i, dialogs in enumerate(dataset):
+        dialog_1, dialog_2 = dialogs
+        result.append((dialog_to_idx(dialog_1, vocabulary), dialog_to_idx(dialog_2, vocabulary)))
         pbar.update(1)
     pbar.close()
+
+    return result
 
 def main(options, args):
     dataset_path = options.dataset_path
     if options.big:
         dataset_name = 'twitter_en_big.txt'
+        suffix = 'big_en'
     else:
         dataset_name = 'twitter_en.txt'
+        suffix = 'en'
 
     dataset_path = os.path.join(dataset_path, dataset_name)
     dataset = []
@@ -62,13 +72,13 @@ def main(options, args):
             dataset.append((lines[i].split(), lines[i+1].split()))
 
     vocabulary = build_vocabulary(dataset, options.min_word_frequency)
-    dataset_to_idx(dataset, vocabulary)
+    dataset = dataset_to_idx(dataset, vocabulary)
 
     logging.info('Saving vocabulary and preprocessed dataset to: {}'.format(options.output_path))
     json.dump(vocabulary, \
-              open(os.path.join(options.output_path, 'twitter_vocabulary_preprocessed.json'), 'w'))
+              open(os.path.join(options.output_path, 'twitter_word_voc_{}.json'.format(suffix)), 'w'))
     json.dump(dataset, \
-              open(os.path.join(options.output_path, 'twitter_dataset_preprocessed.json'), 'w'))
+              open(os.path.join(options.output_path, 'twitter_word_data_{}.json'.format(suffix)), 'w'))
 
     return 0
 
