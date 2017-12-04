@@ -26,11 +26,11 @@ def build_vocabulary(dataset, min_word_frequency):
     logging.info('Creating vocabulary')
     words = [word for word, count in word_count.items() if count >= min_word_frequency]
 
-    vocabulary = dict(zip(words, range(len(words))))
-    vocabulary['<UNK>'] = len(vocabulary)
-    vocabulary['<SOL>'] = len(vocabulary)
-    vocabulary['<EOL>'] = len(vocabulary)
-    vocabulary['<PAD>'] = len(vocabulary) 
+    vocabulary = dict(zip(words, range(1, len(words)+1)))
+    vocabulary['<UNK>'] = len(vocabulary) + 1
+    vocabulary['<SOL>'] = len(vocabulary) + 1
+    vocabulary['<EOL>'] = len(vocabulary) + 1
+    vocabulary['<PAD>'] = 0
     return vocabulary
 
 def dialog_to_idx(dialog, vocabulary):
@@ -69,6 +69,9 @@ def main(options, args):
     with open(dataset_path, 'r') as f:
         lines = f.readlines()
         for i in range(0, len(lines), 2):
+            if options.num_samples is not None and i >= 2*options.num_samples:
+                break
+
             dataset.append((lines[i].split(), lines[i+1].split()))
 
     vocabulary = build_vocabulary(dataset, options.min_word_frequency)
@@ -90,6 +93,7 @@ if __name__ == "__main__":
                       help='Whether or not to use twitter_en_big.txt')
     parser.add_option('-m', '--min-word-frequency', dest='min_word_frequency', type=int, default=5, \
                       help='Minimum number of times that word must appear to be added to the vocabulary.')
+    parser.add_option('--num-samples', dest='num_samples', type=int, default=None)
     parser.add_option('-o', '--output-path', dest='output_path', type=str, \
                       help='Path to store preprocessed dataset')
     (options, args) = parser.parse_args()

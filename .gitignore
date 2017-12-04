@@ -1,8 +1,5 @@
-results/
-datasets/ubuntu_2.0
-datasets/generative
-datasets/preprocessed
-
+checkpoints/
+datasets/
 *.swp
 
 # Byte-compiled / optimized / DLL files
