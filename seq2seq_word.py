@@ -9,14 +9,16 @@ from optparse import OptionParser
 import keras
 import numpy as np
 import seq2seq
-from keras.models import Model
-from keras.layers import Embedding, Input
+from keras.models import Model, Sequential
+from keras.layers import Dense, Embedding, Input, LSTM
 from keras.preprocessing.sequence import pad_sequences
-from seq2seq.models import Seq2Seq, AttentionSeq2Seq
 
 def get_data_iter(num_epochs, batch_size, dataset, voc,
                  max_encoder_seq_len, max_decoder_seq_len, 
                  shuffle=True):
+    """Creates a data iterator that can be used to feed in batches of data to the 
+       Seq2Seq model.
+    """
 
     input_texts, target_texts = zip(*dataset)
     num_samples = len(input_texts)
@@ -50,23 +52,67 @@ def get_data_iter(num_epochs, batch_size, dataset, voc,
 
             yield (encoder_input_data, decoder_target_data)
 
+def build_stacked_lstm(rnn_dim, depth, input_shape, return_sequences=False):
+    layers = []
+    if depth <= 1:
+        layers.append(LSTM(rnn_dim, input_shape=input_shape, return_state=True, return_sequences=return_sequences))
+        return layers
+    
+    layers.append(LSTM(rnn_dim, input_shape=input_shape, return_sequences=True))
+    for i in range(depth-2):
+        layers.append(LSTM(rnn_dim, return_sequences=True))
+    layers.append(LSTM(rnn_dim, return_state=True, return_sequences=return_sequences))
 
-def build_model(batch_size, voc_size, embed_size, 
-                max_encoder_seq_len, max_decoder_seq_len,
-                rnn_dim, depth, bidirectional):
+    return layers
 
-    encoder_inputs = Input(shape=(max_encoder_seq_len,))
-    embedding = Embedding(voc_size, embed_size)
+def run_lstm(layers, inputs, initial_state=None):
+    if len(layers) == 1:
+        return layers[0](inputs, initial_state=initial_state)
 
-    seq2seq = AttentionSeq2Seq(input_dim=embed_size, input_length=max_encoder_seq_len, 
-                               output_dim=voc_size, output_length=max_decoder_seq_len, 
-                               hidden_dim=rnn_dim, depth=options.depth, bidirectional=options.bidirectional)
+    print('NumLayers: {}'.format(len(layers)))
+    last_output = layers[0](inputs, initial_state=initial_state)
+    for l in range(1, len(layers)-1):
+        last_output = layers[l](last_output)
 
-    embedded_input = embedding(encoder_inputs)
-    output = seq2seq(embedded_input)
+    return layers[-1](last_output)
 
-    model = Model([encoder_inputs], output)
-    model.compile(loss='categorical_crossentropy', optimizer='adam')
+def build_seq2seq(voc_size, embed_dim, num_encoder_tokens, num_decoder_tokens, depth, sampling=True):
+    """Builds a Seq2Seq model that operates on words.
+
+    Keyword Arguments:
+        voc_size: size of the vocabulary 
+    """
+    encoder_inputs = Input(shape=(num_encoder_tokens,))
+    embedding = Embedding(voc_size, embed_dim)
+
+    encoder = build_stacked_lstm(embed_dim, depth, input_shape=(num_encoder_tokens, embed_dim))
+    encoder_embedded_inputs = embedding(encoder_inputs)
+    encoder_outputs, state_h, state_c = run_lstm(encoder, encoder_embedded_inputs)
+    encoder_states = [state_h, state_c]
+
+    decoder_inputs = Input(shape=(num_decoder_tokens,))
+    decoder = build_stacked_lstm(embed_dim, depth, input_shape=(num_decoder_tokens, embed_dim), return_sequences=True)
+    decoder_embedded_inputs = embedding(decoder_inputs) 
+    decoder_outputs, _, _= run_lstm(decoder, decoder_embedded_inputs, initial_state=encoder_states)
+    decoder_dense = Dense(voc_size, activation='softmax')
+    decoder_outputs = decoder_dense(decoder_outputs)
+
+    model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+
+    if sampling:
+        encoder_model = Model(encoder_inputs, encoder_states)
+
+        decoder_state_input_h = Input(shape=(embed_dim,))
+        decoder_state_input_c = Input(shape=(embed_dim,))
+        decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+        decoder_outputs, state_h, state_c = run_lstm(decoder, decoder_embedded_inputs, initial_state=decoder_states_inputs)
+        decoder_states = [state_h, state_c]
+        decoder_outputs = decoder_dense(decoder_outputs)
+        decoder_model = Model(
+            [decoder_inputs] + decoder_states_inputs,
+            [decoder_outputs] + decoder_states)
+
+        return model, encoder_model, decoder_model
 
     return model
 
@@ -82,10 +128,11 @@ def main(options, args):
     print('num_samples: {}'.format(len(dataset)))
     print('max_encoder_seq_len: {}'.format(max_encoder_seq_len))
     print('max_decoder_seq_len: {}'.format(max_decoder_seq_len))
-
-    model = build_model(options.batch_size, len(voc), options.embed_size, 
+    model = build_seq2seq(len(voc), options.embed_size, 
                         max_encoder_seq_len, max_decoder_seq_len, 
-                        options.rnn_dim, options.depth, options.bidirectional)
+                        options.depth)
+
+    pdb.set_trace()
 
     train_iter = get_data_iter(None, options.batch_size, dataset, voc,
                                max_encoder_seq_len, max_decoder_seq_len)
@@ -100,11 +147,9 @@ if __name__ == '__main__':
     parser = OptionParser()
     parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./datasets/preprocessed/')
 
-    parser.add_option('--rnn-dim', dest='rnn_dim', type=int, default=256)
-    parser.add_option('--embed-size', dest='embed_size', type=int, default=128)
-    parser.add_option('--depth', dest='depth', type=int, default=1)
-    parser.add_option('--no-bidirectional', dest='bidirectional', action='store_false', default=True)
-    parser.add_option('--batch-size', dest='batch_size', type=int, default=64)
+    parser.add_option('--embed-size', dest='embed_size', type=int, default=1024)
+    parser.add_option('--depth', dest='depth', type=int, default=3)
+    parser.add_option('--batch-size', dest='batch_size', type=int, default=32)
     parser.add_option('--num-epochs', dest='num_epochs', type=int, default=100)
     (options, args) = parser.parse_args()
 
