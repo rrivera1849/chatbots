@@ -1,5 +1,6 @@
 
 import os
+import pickle
 import pdb
 import sys
 from random import shuffle
@@ -8,6 +9,14 @@ import numpy as np
 import pandas as pd
 
 def load_data():
+    df = pd.read_csv('twitter_retrieval.csv')
+
+    with open('metadata.pkl', 'rb') as f:
+        metadata = pickle.load(f)
+
+    return metadata, df['context'], df['utterance'], df['label']
+
+def load_np_data():
     q = np.load('idx_q.npy')
     a = np.load('idx_a.npy')
 
@@ -25,7 +34,7 @@ def to_string(l):
     return result
 
 def main():
-    trainX, trainY = load_data()
+    trainX, trainY = load_np_data()
     trainX = to_string(trainX)
     trainY = to_string(trainY)
 

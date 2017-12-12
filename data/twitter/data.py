@@ -2,7 +2,6 @@
 import numpy as np
 
 def load_data(PATH=''):
-    # read data control dictionaries
     try:
         with open(PATH + 'metadata.pkl', 'rb') as f:
             metadata = pickle.load(f)
@@ -14,7 +13,6 @@ def load_data(PATH=''):
     return metadata, idx_q, idx_a
 
 def split_dataset(x, y, ratio = [0.7, 0.15, 0.15] ):
-    # number of examples
     data_len = len(x)
     lens = [ int(data_len*item) for item in ratio ]
 
