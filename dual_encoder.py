@@ -60,16 +60,16 @@ def load_udc():
         padded_distractor = pad_sequences(val_distractors[:, i], maxlen=options.max_utterance_length, value=len(vocab)) 
         distractors.append(padded_distractor)
 
-    return contexts, utterances, val_contexts, val_utterances, distractors, vocab
+    return contexts, utterances, val_contexts, val_utterances, distractors, labels, vocab
 
-def build_dual_encoder(max_context_length, max_utterance_length, vocab_size):
+def build_dual_encoder(vocab_size):
     # Placeholders for context and utterance inputs
     context_sequence = Input((options.max_context_length,))
     utterance_sequence = Input((options.max_utterance_length,))
 
     # Add Embedding Layer and LSTM network to encode our inputs
     encoder = Sequential()
-    encoder.add(Embedding(len(vocab)+1, output_dim=options.embedding_dim))
+    encoder.add(Embedding(vocab_size+1, output_dim=options.embedding_dim))
     encoder.add(LSTM(options.rnn_dim))
 
     context_encoded = encoder(context_sequence)
@@ -125,15 +125,15 @@ class LossHistory(keras.callbacks.Callback):
 
 def run_udc(options, args):
     # Create callback to save a model checkpoint every epoch
-    pdb.set_trace()
-    contexts, utterances, val_contexts, val_utterances, distractors, vocab  = load_udc()
-    model = build_dual_encoder(options.max_context_length, max_utterance_length, len(vocab))
+    global val_contexts, val_utterances, distractors
+    contexts, utterances, val_contexts, val_utterances, distractors, labels, vocab  = load_udc()
+    model = build_dual_encoder(len(vocab))
 
     filepath = 'dual_encoder_best.hdf5'
     checkpointer = ModelCheckpoint(filepath, save_best_only=True, monitor='loss', mode='min')
 
     # Create a callback to evaluate on our validation data every epoch
-    evaluate_model_cb = keras.callbacks.LambdaCallback(on_epoch_begin=lambda epoch, logs: evaluate_on_validation(epoch, logs, model))
+    evaluate_model_cb = keras.callbacks.LambdaCallback(on_epoch_begin=lambda epoch, logs: udc_evaluate_on_validation(epoch, logs, model))
     # Add callback to save Loss History
     loss_history = LossHistory()
 
@@ -152,6 +152,7 @@ def main(options, args):
     return 0
 
 if __name__ == '__main__':
+    global options, args
     (options, args) = parser.parse_args()
 
     sys.exit(main(options, args))
