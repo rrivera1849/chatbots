@@ -14,6 +14,8 @@ from keras.layers import Input, Activation, Dense, LSTM, dot
 from keras.preprocessing.sequence import pad_sequences
 import numpy as np
 
+from data.twitter import data_retrieval
+
 parser = OptionParser()
 
 parser.add_option('--num-epochs', type=int, default=5,
@@ -123,7 +125,7 @@ class LossHistory(keras.callbacks.Callback):
     def on_batch_end(self, batch, logs={}):
         self.losses.append(logs.get('loss'))
 
-def run_udc(options, args):
+def run_udc():
     # Create callback to save a model checkpoint every epoch
     global val_contexts, val_utterances, distractors
     contexts, utterances, val_contexts, val_utterances, distractors, labels, vocab  = load_udc()
@@ -138,16 +140,34 @@ def run_udc(options, args):
     loss_history = LossHistory()
 
     # Train the model
-    model.fit([contexts, utterances], labels, batch_size=options.batch_size, 
-              epochs=options.num_epochs, callbacks=[checkpointer, evaluate_model_cb, loss_history])
+    history = model.fit([contexts, utterances], labels, batch_size=options.batch_size, 
+                        epochs=options.num_epochs, callbacks=[checkpointer, evaluate_model_cb, loss_history])
     pickle.dump(loss_history.losses, open('dual_encoder_loss_history.pkl', 'wb'))
     pickle.dump(all_results, open('dual_encoder_all_results.pkl', 'wb'))
 
+def run_twitter():
+    metadata, contexts, utterances, labels = data_retrieval.load_data('./data/twitter')
+    vocab = metadata['w2idx']
+    model = build_dual_encoder(len(vocab))
+
+    filepath = 'twitter_dual_encoder_best.hdf5'
+    checkpointer = ModelCheckpoint(filepath, save_best_only=True, monitor='loss', mode='min')
+
+    # Add callback to save Loss History
+    loss_history = LossHistory()
+
+    # Train the model
+    history = model.fit([contexts, utterances], labels, batch_size=options.batch_size, 
+                        epochs=options.num_epochs, callbacks=[checkpointer, loss_history])
+    losses = {}
+    losses['loss'] = loss_history.losses
+    pickle.dump(losses, open('twitter_dual_encoder_loss_history.pkl', 'wb'))
+
 def main(options, args):
     if options.twitter:
-        pass
+        run_twitter()
     else:
-        run_udc(options, args)
+        run_udc()
 
     return 0
 

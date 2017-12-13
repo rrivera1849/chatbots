@@ -8,13 +8,19 @@ from random import shuffle
 import numpy as np
 import pandas as pd
 
-def load_data():
-    df = pd.read_csv('twitter_retrieval.csv')
+def convert_to_numpy(series):
+    result = []
+    for index, value in series.iteritems():
+        result.append([int(x) for x in value.split()])
+    return np.array(result)
 
-    with open('metadata.pkl', 'rb') as f:
+def load_data(path):
+    df = pd.read_csv(os.path.join(path, 'twitter_retrieval.csv'))
+
+    with open(os.path.join(path, 'metadata.pkl'), 'rb') as f:
         metadata = pickle.load(f)
 
-    return metadata, df['context'], df['utterance'], df['label']
+    return metadata, convert_to_numpy(df['context']), convert_to_numpy(df['utterance']), np.array(df['label'])
 
 def load_np_data():
     q = np.load('idx_q.npy')
