@@ -25,8 +25,8 @@ parser.add_option('--dropout', type=float, default=0.5)
 parser.add_option('--nlayers', type=int, default=3)
 parser.add_option('--lr', type=float, default=0.0001)
 
-def load_data():
-    metadata, idx_q, idx_a = data.load_data(options.data_path)
+def load_data(path):
+    metadata, idx_q, idx_a = data.load_data(path)
     (trainX, trainY), (testX, testY), (validX, validY) = data.split_dataset(idx_q, idx_a)
 
     trainX = trainX.tolist()
@@ -57,31 +57,33 @@ def prepare_vocab(w2idx, idx2w):
 
     return w2idx, idx2w, xvocab_size
 
-def build_seq2seq_word(encode_seqs, decode_seqs, xvocab_size, is_train=True, reuse=False):
+def build_seq2seq_word(encode_seqs, decode_seqs, xvocab_size, 
+                       batch_size, embedding_dim, nlayers, dropout, is_train=True, reuse=False):
 
     with tf.variable_scope("model", reuse=reuse):
         with tf.variable_scope("embedding") as vs:
             net_encode = EmbeddingInputlayer(
                 inputs = encode_seqs,
                 vocabulary_size = xvocab_size,
-                embedding_size = options.embedding_dim,
+                embedding_size = embedding_dim,
                 name = 'seq_embedding')
             vs.reuse_variables()
             tl.layers.set_name_reuse(True)
             net_decode = EmbeddingInputlayer(
                 inputs = decode_seqs,
                 vocabulary_size = xvocab_size,
-                embedding_size = options.embedding_dim,
+                embedding_size = embedding_dim,
                 name = 'seq_embedding')
+
         net_rnn = Seq2Seq(net_encode, net_decode,
                 cell_fn = tf.contrib.rnn.BasicLSTMCell,
-                n_hidden = options.embedding_dim,
+                n_hidden = embedding_dim,
                 initializer = tf.random_uniform_initializer(-0.1, 0.1),
                 encode_sequence_length = retrieve_seq_length_op2(encode_seqs),
                 decode_sequence_length = retrieve_seq_length_op2(decode_seqs),
                 initial_state_encode = None,
-                dropout = (options.dropout if is_train else None),
-                n_layer = options.nlayers,
+                dropout = (dropout if is_train else None),
+                n_layer = nlayers,
                 return_seq_2d = True,
                 name = 'seq2seq')
         net_out = DenseLayer(net_rnn, n_units=xvocab_size, act=tf.identity, name='output')
@@ -89,7 +91,7 @@ def build_seq2seq_word(encode_seqs, decode_seqs, xvocab_size, is_train=True, reu
     return net_out, net_rnn
 
 def main():
-    trainX, trainY, testX, testY, validX, validY, metadata = load_data()
+    trainX, trainY, testX, testY, validX, validY, metadata = load_data(options.data_path)
 
     xseq_len = len(trainX)
     yseq_len = len(trainY)
@@ -118,12 +120,15 @@ def main():
     decode_seqs = tf.placeholder(dtype=tf.int64, shape=[options.batch_size, None], name="decode_seqs")
     target_seqs = tf.placeholder(dtype=tf.int64, shape=[options.batch_size, None], name="target_seqs")
     target_mask = tf.placeholder(dtype=tf.int64, shape=[options.batch_size, None], name="target_mask")
-    net_out, _ = build_seq2seq_word(encode_seqs, decode_seqs, xvocab_size, is_train=True, reuse=False)
+
+    net_out, _ = build_seq2seq_word(encode_seqs, decode_seqs, xvocab_size, 
+            options.batch_size, options.embedding_dim, options.nlayers, options.dropout, is_train=True, reuse=False)
 
     # Initialize seq2seq_word for inference
     encode_seqs2 = tf.placeholder(dtype=tf.int64, shape=[1, None], name="encode_seqs")
     decode_seqs2 = tf.placeholder(dtype=tf.int64, shape=[1, None], name="decode_seqs")
-    net, net_rnn = build_seq2seq_word(encode_seqs2, decode_seqs2, xvocab_size, is_train=False, reuse=True)
+    net, net_rnn = build_seq2seq_word(encode_seqs2, decode_seqs2, xvocab_size, 
+            options.batch_size, options.embedding_dim, options.nlayers, options.dropout, is_train=False, reuse=True)
     y = tf.nn.softmax(net.outputs)
 
     loss = tl.cost.cross_entropy_seq_with_mask(logits=net_out.outputs, target_seqs=target_seqs, 
