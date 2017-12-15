@@ -1,3 +1,4 @@
+# Code inspired from: https://github.com/keras-team/keras/blob/master/examples/lstm_seq2seq.py
 
 import os
 import math
