@@ -96,7 +96,7 @@ def main(options, args):
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./datasets/preprocessed/twitter_char_1000.pkl')
+    parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./data/twitter/twitter_char_100000.pkl')
     parser.add_option('--checkpoint-path', dest='checkpoint_path', type=str, default='./checkpoints')
     (options, args) = parser.parse_args()
 

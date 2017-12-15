@@ -97,8 +97,8 @@ def main(options, args):
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./datasets/generative/twitter_en.txt')
-    parser.add_option('--output-path', dest='output_path', type=str, default='./datasets/preprocessed')
+    parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./data/twitter/twitter_en.txt')
+    parser.add_option('--output-path', dest='output_path', type=str, default='./data/twitter')
     parser.add_option('--num-samples', dest='num_samples', type=int, default=None)
     (options, args) = parser.parse_args()
 
