@@ -1,3 +1,4 @@
+# Code inspired from: https://github.com/zsdonghao/seq2seq-chatbot/blob/master/main_simple_seq2seq.py
 
 import os
 import pdb
