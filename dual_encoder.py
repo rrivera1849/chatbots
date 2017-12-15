@@ -38,7 +38,7 @@ parser.add_option('--max-utterance-length', type=int, default=80,
 all_results = {}
 
 def load_udc():
-    dataset_path = 'datasets/preprocessed'
+    dataset_path = './data/udc'
     train_path = os.path.join(dataset_path, 'train_preprocessed.json')
     validation_path = os.path.join(dataset_path, 'validation_preprocessed.json')
     vocabulary_path = os.path.join(dataset_path, 'vocabulary.json')
