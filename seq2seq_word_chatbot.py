@@ -18,7 +18,7 @@ from seq2seq_word import build_seq2seq_word, load_data, prepare_vocab
 parser = OptionParser()
 parser.add_option('--data-path', type=str, default='./data/twitter/')
 parser.add_option('--checkpoint-path', type=str, default='./lstm.npz')
-parser.add_option('--dual-encoder-path', type=str, default='./twitter_dual_encoder_best.hdf5')
+parser.add_option('--dual-encoder-path', type=str, default=None)
 
 parser.add_option('--batch-size', type=int, default=32)
 parser.add_option('--embedding-dim', type=int, default=1024)
@@ -148,19 +148,23 @@ def main():
 
             total_iter += 1
 
-        ranked_sentences = []
-        for s in sentences:
-            encoded_q = [de_vocab.get(x, de_vocab['unk']) for x in seed]
-            encoded_s = [de_vocab.get(x, de_vocab['unk']) for x in s]
-            padded_encoded_q = pad(encoded_q, 20)
-            padded_encoded_s = pad(encoded_s, 20)
+        if options.dual_encoder_path:
+            ranked_sentences = []
+            for s in sentences:
+                encoded_q = [de_vocab.get(x, de_vocab['unk']) for x in seed]
+                encoded_s = [de_vocab.get(x, de_vocab['unk']) for x in s]
+                padded_encoded_q = pad(encoded_q, 20)
+                padded_encoded_s = pad(encoded_s, 20)
 
-            score = model.predict([padded_encoded_q, padded_encoded_s])[0][0]
-            ranked_sentences.append((s, score))
+                score = model.predict([padded_encoded_q, padded_encoded_s])[0][0]
+                ranked_sentences.append((s, score))
 
-        ranked_sentences = sorted(ranked_sentences, key = lambda x: x[1], reverse=True)
-        for s, score in ranked_sentences:
-            print('----- {} -> {}'.format(' '.join(s), score))
+            ranked_sentences = sorted(ranked_sentences, key = lambda x: x[1], reverse=True)
+            for s, score in ranked_sentences:
+                print('----- {} -> {}'.format(' '.join(s), score))
+        else:
+            for s in sentences:
+                print('----- {}'.format(' '.join(s)))
 
 if __name__ == '__main__':
     global options, args

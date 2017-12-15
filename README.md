@@ -133,6 +133,26 @@ The output will be saved in your current working directory. You can also tune th
     --nlayers=NLAYERS
     --lr=LR
 
+## Running Chatbots
+
+The same rules for running in the GPU apply, you must set the environment variable as discussed above.
+
+### Seq2Seq Character 
+
+To talk to a Seq2Seq Character model run the following command:
+
+```
+python seq2seq_char_chatbot.py --checkpoint-path path/to/checkpoint
+```
+
+### Seq2Seq Word
+
+To talk to a Seq2Seq Word model run the following command:
+
+```
+python seq2seq_word.py --checkpoint-path path/to/model
+```
+
 ## Authors
 
 * **Rafael A. Rivera-Soto** (rivera43@stanford.edu)
