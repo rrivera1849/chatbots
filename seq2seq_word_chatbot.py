@@ -88,19 +88,37 @@ def main():
     tl.layers.initialize_global_variables(sess)
     tl.files.load_and_assign_npz(sess=sess, name='lstm.npz', network=net)
 
-    print('Talk to the Chatbot!')
-    while True:
-        seed= input()
-        seed = seed.strip()
+    custom_contexts = [
+            'happy birthday have a nice day',
+            'donald trump won last nights presidential debate according to snap online polls',
+            'how are you',
+            'do you love me',
+            'game of thrones is the best show ever',
+            'republicans are really smart',
+            'you are just jealous',
+            'is it ok to hit kids',
+            'are you conscious'
+            ]
 
-        if seed == "":
-            break
+    it = 0
+    while True:
+        if it < len(custom_contexts):
+            seed = custom_contexts[it]
+            it += 1
+        else:
+            print('Talk to Chatbot')
+            seed= input()
+            seed = seed.strip()
+
+            if seed == "":
+                break
 
         print("Query >", seed, flush=True)
         seed_id = [w2idx.get(w, w2idx['unk']) for w in seed.split(" ")]
 
         sentences = []
-        for _ in range(10):
+        total_iter = 0
+        while True:
             state = sess.run(net_rnn.final_state_encode,
                             {encode_seqs2: [seed_id]})
 
@@ -122,7 +140,13 @@ def main():
                     break
                 sentence = sentence + [w]
 
-            sentences.append(sentence)
+            if sentence not in sentences:
+                sentences.append(sentence)
+
+            if total_iter > 1000 or len(sentences) > 50:
+                break
+
+            total_iter += 1
 
         ranked_sentences = []
         for s in sentences:

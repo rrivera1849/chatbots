@@ -22,7 +22,7 @@ parser.add_option('--batch-size', type=int, default=32)
 parser.add_option('--num-epochs', type=int, default=50)
 parser.add_option('--embedding-dim', type=int, default=1024)
 parser.add_option('--dropout', type=float, default=0.5)
-parser.add_option('--nlayers', type=int, default=3)
+parser.add_option('--nlayers', type=int, default=4)
 parser.add_option('--lr', type=float, default=0.0001)
 
 def load_data(path):
