@@ -40,6 +40,14 @@ This section is a breakdown of each file included in the repository and their fu
 * seq2seq_word.py -- Implements a Sequence to Sequence model that operates on words, see [this](https://github.com/zsdonghao/seq2seq-chatbot/blob/master/main_simple_seq2seq.py) for an example
 * seq2seq_word_chatbot.py -- Takes a seq2seq word model and lets the user interact with it
 
+In general, this repository contains implementations of various conversational agent models. Some of the models included are:
+* Dual Encoder model described in this [paper](https://arxiv.org/abs/1510.03753) for retrieval-based chatbots in the Ubuntu Dialog Corpus
+* [Sequence to Sequence](https://papers.nips.cc/paper/5346-sequence-to-sequence-learning-with-neural-networks.pdf) models that operate on both characters 
+  and words
+* It also allows you to interact with both of these chatbots and includes a dual paradigm chatbot that first uses a generative Sequence to Sequence
+  model to generate K responses and then scores each one with the Dual Encoder model. In this way we leverage the dynamic nature of generative responses 
+  while taking advantage of retrieval based models.
+
 ## Training Models
 
 To train any model on the gpu you must first set an environment variable to indicate which GPU to use:
@@ -151,6 +159,15 @@ To talk to a Seq2Seq Word model run the following command:
 
 ```
 python seq2seq_word.py --checkpoint-path path/to/model
+```
+
+### Dual Paradigm Models
+
+To talk to a Dual Paradigm model you must first train the Dual Encoder model on the twitter dataset and the Seq2Seq Word model. Once you 
+have checkpoints for both you may run the following command:
+
+```
+python seq2seq_word.py --checkpoint-path path/to/seq2seq_model --dual-encoder-path /path/to/dual_encoder_model
 ```
 
 ## Authors
