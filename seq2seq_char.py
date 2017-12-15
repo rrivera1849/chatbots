@@ -10,7 +10,12 @@ import keras
 from keras.models import Model, Sequential
 from keras.layers import Input, LSTM, Dense, Embedding
 
-import utils
+class LossHistory(keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+        
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
 
 def get_data_iter(num_epochs, batch_size,
                  input_texts, target_texts, 
@@ -117,7 +122,7 @@ def main(options, args):
     model, encoder_model, decoder_model = build_seq2seq(options.rnn_dim, num_encoder_tokens, num_decoder_tokens)
     model.compile(optimizer='adam', loss='categorical_crossentropy')
 
-    loss_history = utils.LossHistory()
+    loss_history = LossHistory()
 
     train_iter = get_data_iter(None, options.batch_size, input_texts, target_texts,
                             max_encoder_seq_len, num_encoder_tokens, 
@@ -153,8 +158,8 @@ def main(options, args):
 
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./datasets/preprocessed/twitter_char_1000.pkl')
-    parser.add_option('--experiment-id', dest='experiment_id', type=str, default=None)
+    parser.add_option('--dataset-path', dest='dataset_path', type=str, default='./data/twitter/twitter_char_100000.pkl')
+    parser.add_option('--experiment-id', dest='experiment_id', type=str, default='seq2seq_char')
 
     parser.add_option('--rnn-dim', dest='rnn_dim', type=int, default=256)
     parser.add_option('--batch-size', dest='batch_size', type=int, default=128)

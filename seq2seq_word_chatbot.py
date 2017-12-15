@@ -18,7 +18,7 @@ from seq2seq_word import build_seq2seq_word, load_data, prepare_vocab
 parser = OptionParser()
 parser.add_option('--data-path', type=str, default='./data/twitter/')
 parser.add_option('--checkpoint-path', type=str, default='./lstm.npz')
-parser.add_option('--dual-encoder-path', type=str, default='./experiments/twitter_dual_encoder/twitter_dual_encoder_best.hdf5')
+parser.add_option('--dual-encoder-path', type=str, default='./twitter_dual_encoder_best.hdf5')
 
 parser.add_option('--batch-size', type=int, default=32)
 parser.add_option('--embedding-dim', type=int, default=1024)
