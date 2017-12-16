@@ -17,6 +17,7 @@ Or code has the following dependencies:
 * tensorflow v1.3
 * tensorlayer
 * sklearn
+* h5py
 
 We recommend that you install a [Miniconda](https://conda.io/miniconda.html) to run the code. 
 
