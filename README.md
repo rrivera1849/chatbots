@@ -16,6 +16,7 @@ Or code has the following dependencies:
 * keras
 * tensorflow v1.3
 * tensorlayer
+* sklearn
 
 We recommend that you install a [Miniconda](https://conda.io/miniconda.html) to run the code. 
 
